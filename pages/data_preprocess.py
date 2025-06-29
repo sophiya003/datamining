@@ -2,27 +2,37 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.model_selection import train_test_split
 
 # ---------------------- Streamlit Setup ----------------------
-st.set_page_config(page_title="Climate Data Explorer", layout="wide")
-st.title("🌤️ Climate Data Preprocessing")
+st.set_page_config(page_title="Climate Data Cleaner", layout="wide")
+st.title("🌤️ Climate Data Cleaning & Preprocessing")
 
-# ---------------------- Cached Data Load ----------------------
-@st.cache_data
-def load_data():
-    if "data" in st.session_state:
-        return st.session_state["data"]
+# ---------------------- Load Data ----------------------
+
+if "data" in st.session_state:
+    df = st.session_state["data"]
+    st.success("Using uploaded or session data.")
+else:
     try:
-        st.warning("⚠️ No uploaded data found. Using default dataset.")
-        return pd.read_csv("data/nepal_gis_dailydata.csv")
+        df = pd.read_csv("data/nepal_gis_dailydata.csv")
+        st.info("No uploaded data found. Using default dataset.")
     except FileNotFoundError:
-        st.error("❌ Default dataset not found.")
+        st.error("Default dataset not found.")
         st.stop()
 
-df = load_data()
+# ---------------------- Convert datetime columns ----------------------
+def convert_datetime(df):
+    for col in df.columns:
+        # Try converting columns that look like dates (strings with date info)
+        if df[col].dtype == object:
+            try:
+                df[col] = pd.to_datetime(df[col], errors='raise')
+                st.info(f"Converted column '{col}' to datetime.")
+            except Exception:
+                pass
+    return df
+
+df = convert_datetime(df)
 
 # ---------------------- Column Selection ----------------------
 with st.expander("🧩 Select Columns"):
@@ -31,174 +41,101 @@ with st.expander("🧩 Select Columns"):
     if selected_columns:
         df = df[selected_columns]
     else:
-        st.warning("⚠️ Please select at least one column to proceed.")
+        st.warning("⚠️ Please select at least one column.")
 
-# ---------------------- Save Numeric Columns to Session ----------------------
-if "numerical_columns" not in st.session_state:
-    st.session_state["numerical_columns"] = df.select_dtypes(include=np.number).columns.tolist()
+# ---------------------- Remove Duplicate Columns ----------------------
+def remove_duplicate_columns(df):
+    duplicated_cols = []
+    cols = df.columns
+    for i in range(len(cols)):
+        for j in range(i + 1, len(cols)):
+            if df[cols[i]].equals(df[cols[j]]):
+                duplicated_cols.append(cols[j])
+    if duplicated_cols:
+        df = df.drop(columns=duplicated_cols)
+        st.warning(f"Removed duplicate columns: {duplicated_cols}")
+    else:
+        st.info("No duplicate columns found.")
+    return df
 
-# ---------------------- User Configuration ----------------------
-with st.expander("🧮 Select Numeric Columns for Processing"):
-    numeric_cols = st.multiselect("Select numeric features", df.select_dtypes(include=np.number).columns.tolist(), default=st.session_state["numerical_columns"])
-    st.session_state["numerical_columns"] = numeric_cols
+df = remove_duplicate_columns(df)
 
-# ---------------------- Target Variable ----------------------
-possible_targets = [col for col in df.columns if col in numeric_cols]
-target = st.selectbox("🎯 Select Target Variable", possible_targets, index=0 if possible_targets else None)
-st.session_state["target_variable"] = target
-
-# ---------------------- Filtering UI (Deferred Execution) ----------------------
+# ---------------------- Filter Rows ----------------------
 with st.expander("🔍 Filter Rows"):
     apply_filter = st.checkbox("Enable Filtering", value=False)
-    filter_col = st.selectbox("Select column to filter", df.columns)
-    filter_params = {}
-
     if apply_filter:
+        filter_col = st.selectbox("Select column to filter", df.columns)
         if pd.api.types.is_numeric_dtype(df[filter_col]):
             min_val, max_val = df[filter_col].min(), df[filter_col].max()
-            filter_range = st.slider(f"Select range for {filter_col}", float(min_val), float(max_val), (float(min_val), float(max_val)))
-            filter_params = {"type": "range", "col": filter_col, "range": filter_range}
+            filter_range = st.slider(f"Range for {filter_col}", float(min_val), float(max_val), (float(min_val), float(max_val)))
+            df = df[df[filter_col].between(filter_range[0], filter_range[1])]
+        elif pd.api.types.is_datetime64_any_dtype(df[filter_col]):
+            min_date, max_date = df[filter_col].min(), df[filter_col].max()
+            date_range = st.date_input(f"Select date range for {filter_col}", [min_date, max_date])
+            if len(date_range) == 2:
+                df = df[(df[filter_col] >= pd.to_datetime(date_range[0])) & (df[filter_col] <= pd.to_datetime(date_range[1]))]
         else:
             unique_vals = df[filter_col].dropna().unique().tolist()
-            selected_vals = st.multiselect(f"Select values for {filter_col}", unique_vals, default=unique_vals)
-            filter_params = {"type": "category", "col": filter_col, "values": selected_vals}
+            selected_vals = st.multiselect(f"Values for {filter_col}", unique_vals, default=unique_vals)
+            df = df[df[filter_col].isin(selected_vals)]
 
-# ---------------------- Preprocessing Options ----------------------
+# ---------------------- Handle Missing Values ----------------------
 missing_strategy = st.radio("🧹 Handle Missing Values", ["Drop rows", "Fill median", "Fill most frequent"], horizontal=True)
 
-normalize = st.checkbox("🔧 Normalize/Standardize Features?")
-scale_method = st.selectbox("Choose Scaling Method", ["MinMax", "Standard"]) if normalize else None
-one_hot_encode = st.checkbox("🧬 One-Hot Encode Categorical Variables?")
-apply_pca = st.checkbox("📉 Apply PCA?")
-n_components = st.slider("Number of PCA Components", 1, min(len(numeric_cols) - 1, 20), 5) if apply_pca else None
-apply_variance_filter = st.checkbox("📊 Remove Low Variance Features?")
-threshold = st.slider("Variance Threshold", 0.0, 1.0, 0.01) if apply_variance_filter else None
-randomize = st.checkbox("🔀 Shuffle Rows?")
-sample_frac = st.slider("📦 Sample Fraction", 0.01, 1.0, 0.1)
-stratified_sample = st.checkbox("📊 Use Stratified Sampling?")
+if missing_strategy == "Drop rows":
+    df = df.dropna()
+elif missing_strategy == "Fill median":
+    df = df.fillna(df.median(numeric_only=True))
+elif missing_strategy == "Fill most frequent":
+    df = df.fillna(df.mode().iloc[0])
 
-# ---------------------- Processing Functions ----------------------
-def apply_filtering(df, params):
-    if not params:
-        return df
-    col = params["col"]
-    if params["type"] == "range":
-        return df[df[col].between(params["range"][0], params["range"][1])]
-    elif params["type"] == "category":
-        return df[df[col].isin(params["values"])]
-    return df
+# ---------------------- Outlier Detection & Removal ----------------------
+with st.expander("⚠️ Outlier Detection & Removal"):
+    enable_outlier = st.checkbox("Enable Outlier Removal?", value=False)
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    
+    if enable_outlier and numeric_cols:
+        outlier_cols = st.multiselect("Select numeric columns for outlier removal", numeric_cols, default=numeric_cols)
+        k = st.number_input("IQR multiplier (k)", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
 
-@st.cache_data
-def handle_correlation(df):
-    corr = df.corr(numeric_only=True).fillna(0)
-    return corr
+        if st.button("Remove Outliers"):
+            before_rows = df.shape[0]
+            for col in outlier_cols:
+                Q1 = df[col].quantile(0.25)
+                Q3 = df[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - k * IQR
+                upper_bound = Q3 + k * IQR
+                df = df[(df[col] >= lower_bound) & (df[col] <= upper_bound)]
+            after_rows = df.shape[0]
+            st.success(f"Removed {before_rows - after_rows} total outlier rows.")
 
-def handle_duplicate(df):
-    return df[df.duplicated()]
-
-def preprocess(df, target):
-    df = df.copy()
-
-    # Filter
-    if apply_filter:
-        df = apply_filtering(df, filter_params)
-
-    # Drop high null columns
-    df.drop(columns=[col for col in df.columns if df[col].isnull().mean() > 0.45], inplace=True)
-    df.dropna(axis=1, how='all', inplace=True)
-
-    # One-hot encode
-    if one_hot_encode:
-        df = pd.get_dummies(df)
-
-    numeric = df.select_dtypes(include=np.number).columns.tolist()
-    features = [col for col in numeric if col != target]
-
-    # Handle missing ONLY if needed
-    if df[features + [target]].isnull().values.any():
-        st.info("ℹ️ Missing values detected. Applying selected strategy.")
-        if missing_strategy == "Drop rows":
-            df.dropna(subset=features + [target], inplace=True)
-        elif missing_strategy == "Fill median":
-            df[features + [target]] = df[features + [target]].fillna(df[features + [target]].median())
-        elif missing_strategy == "Fill most frequent":
-            df[features + [target]] = df[features + [target]].fillna(df[features + [target]].mode().iloc[0])
-    else:
-        st.success("✅ No missing values found. Skipping missing value handling.")
-
-    if df.empty:
-        st.error("❌ All rows dropped after missing value handling.")
-        return pd.DataFrame()
-
-    # Normalize
-    if normalize:
+# ---------------------- Normalize/Standardize ----------------------
+normalize = st.checkbox("🔧 Normalize/Standardize numeric columns?")
+if normalize:
+    scale_method = st.selectbox("Choose Scaling Method", ["MinMax", "Standard"])
+    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
+    if numeric_cols:
         scaler = MinMaxScaler() if scale_method == "MinMax" else StandardScaler()
-        df[features] = scaler.fit_transform(df[features])
-
-    # Variance filter
-    if apply_variance_filter and threshold is not None:
-        selector = VarianceThreshold(threshold)
-        selected_data = selector.fit_transform(df[features])
-        selected_features = [features[i] for i in selector.get_support(indices=True)]
-        df = pd.concat([pd.DataFrame(selected_data, columns=selected_features, index=df.index), df[[target]]], axis=1)
-        features = selected_features
-
-    # PCA
-    if apply_pca and n_components:
-        pca = PCA(n_components=n_components)
-        pca_data = pca.fit_transform(df[features])
-        df = pd.concat([pd.DataFrame(pca_data, columns=[f"PC{i+1}" for i in range(n_components)], index=df.index), df[[target]]], axis=1)
-
-    # Sampling
-    if stratified_sample:
-        try:
-            df, _ = train_test_split(df, test_size=(1 - sample_frac), stratify=df[target], random_state=42)
-        except ValueError:
-            st.warning("⚠️ Stratified sampling failed. Using random sampling.")
-            df = df.sample(frac=sample_frac, random_state=42)
+        df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
     else:
-        if randomize:
-            df = df.sample(frac=1.0, random_state=42)
-        df = df.sample(frac=sample_frac, random_state=42)
+        st.warning("⚠️ No numeric columns to scale.")
 
-    return df
-
-# ---------------------- Execution ----------------------
-if st.button("🚀 Preprocess Data"):
+# ---------------------- Show Processed Data ----------------------
+if st.button("🚀 Process Data"):
     if df.empty:
-        st.error("❌ No data to preprocess.")
-    elif target not in df.columns:
-        st.error("❌ Target column not found.")
+        st.error("❌ No data available after preprocessing.")
     else:
-        preprocessed_df = preprocess(df, target)
-        if not preprocessed_df.empty:
-            st.success("✅ Preprocessing Complete!")
-            st.dataframe(preprocessed_df.head())
-            st.info(f"🧾 Data shape: {preprocessed_df.shape}")
-            st.session_state["preprocessed_data"] = preprocessed_df
+        st.success("✅ Data ready for visualization!")
+        st.dataframe(df)  # Show full dataframe after processing
+        st.info(f"🧾 Data shape: {df.shape}")
 
-            st.download_button(
-                label="⬇️ Download Preprocessed CSV",
-                data=preprocessed_df.to_csv(index=False).encode("utf-8"),
-                file_name="preprocessed_climate_data.csv",
-                mime="text/csv"
-            )
+        # Save processed data in session_state
+        st.session_state["preprocessed_data"] = df.copy()
 
-# ---------------------- Post-Processing Expander ----------------------
-with st.expander("🔁 View Duplicate Rows (After Preprocessing)"):
-    if "preprocessed_data" in st.session_state:
-        duplicates = handle_duplicate(st.session_state["preprocessed_data"])
-        if not duplicates.empty:
-            st.warning(f"{len(duplicates)} duplicate rows found.")
-            st.dataframe(duplicates)
-        else:
-            st.success("✅ No duplicate rows found.")
-    else:
-        st.info("ℹ️ Preprocess data first.")
-
-with st.expander("📊 Correlation Matrix (After Preprocessing)"):
-    if "preprocessed_data" in st.session_state:
-        corr = handle_correlation(st.session_state["preprocessed_data"])
-        st.dataframe(corr.style.background_gradient(cmap="coolwarm").format(precision=2))
-    else:
-        st.info("ℹ️ Preprocess data first.")
+        st.download_button(
+            label="⬇️ Download Cleaned CSV",
+            data=df.to_csv(index=False).encode("utf-8"),
+            file_name="cleaned_climate_data.csv",
+            mime="text/csv"
+        )

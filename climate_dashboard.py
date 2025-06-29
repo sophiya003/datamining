@@ -40,7 +40,7 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file)
     st.success("Custom data loaded successfully.")
 else:
-    df = pd.read_csv("data/nepal_gis_daily_data.csv")
+    df = pd.read_csv("data/nepal_gis_dailydata.csv")
     st.info("Using default climate dataset.")
 
 # ----------------- Store in Session -----------------

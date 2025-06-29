@@ -57,7 +57,7 @@ with tab2:
     st.markdown("### Column Details")
     st.dataframe(dtypes, use_container_width=True)
 
- # Detect binary categorical columns
+
 binary_cols = [col for col in df.select_dtypes(include=['int64', 'float64']).columns 
                if df[col].dropna().nunique() == 2]
 
@@ -67,7 +67,6 @@ num_cols = [col for col in df.select_dtypes(include=['int64', 'float64']).column
             if col not in binary_cols]
    
 
-# ----------------- Tab 3: Feature Statistics -----------------
 with tab3:
     st.subheader("Numerical Feature Statistics")
     num_stats = df[num_cols].describe().T
@@ -81,7 +80,7 @@ with tab3:
     else:
         st.info("No categorical columns found.")
 
-# ----------------- Tab 4: Feature Correlation -----------------
+
 with tab4:
     st.subheader("Feature Correlation to Target")
 

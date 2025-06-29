@@ -689,16 +689,50 @@ with tabs[2]:  # Bar tab
     if len(few_category_columns) == 0:
         st.warning("No categorical columns with fewer than 10 unique values found for bar chart.")
     else:
-        bar_col = st.selectbox("📊 Bar Chart Column", few_category_columns, key="bar_col")
-        if bar_col in df_sample.columns:
-            bar_data = df_sample[bar_col].value_counts().nlargest(TOP_N)
-            fig_bar = px.bar(
-                x=bar_data.values,
-                y=bar_data.index,
-                orientation='h',
-                color=bar_data.values,
-                color_continuous_scale='Viridis'
+        # Allow users to select both X and Y columns
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # X-axis selection (categorical column)
+            x_col = st.selectbox(
+                "📊 X-axis (Categories)", 
+                few_category_columns, 
+                key="bar_x_col"
             )
+        
+        with col2:
+            # Y-axis selection (numeric columns only)
+            numeric_columns = df_sample.select_dtypes(include=[np.number]).columns.tolist()
+            if len(numeric_columns) == 0:
+                st.warning("No numeric columns found for Y-axis.")
+                y_col = None
+            else:
+                y_col = st.selectbox(
+                    "📈 Y-axis (Numeric Values)", 
+                    numeric_columns, 
+                    key="bar_y_col"
+                )
+        
+        if x_col in df_sample.columns and y_col is not None:
+            # Create bar chart using numeric Y-axis values
+            # Group by X column and aggregate Y column (using mean, but you can change to sum, etc.)
+            bar_data = df_sample.groupby(x_col)[y_col].mean().nlargest(TOP_N)
+            y_values = bar_data.values
+            x_categories = bar_data.index
+            y_title = f"Average {y_col}"
+            
+            # Create the bar chart
+            fig_bar = px.bar(
+                x=y_values,
+                y=x_categories,
+                orientation='h',
+                color=y_values,
+                color_continuous_scale='Viridis',
+                labels={'x': y_title, 'y': x_col},
+                title=f"{y_title} by {x_col}"
+            )
+            
+            # Update layout
             fig_bar.update_layout(
                 template=None,
                 plot_bgcolor='rgba(0,0,0,0)',
@@ -706,11 +740,46 @@ with tabs[2]:  # Bar tab
                 font=dict(color='white', family='Inter'),
                 height=400,
                 showlegend=False,
-                xaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.1)'),
-                yaxis=dict(showgrid=False)
+                xaxis=dict(
+                    showgrid=True, 
+                    gridcolor='rgba(0,0,0,0.1)',
+                    title=y_title
+                ),
+                yaxis=dict(
+                    showgrid=False,
+                    title=x_col
+                )
             )
+            
+            # Display the chart
             st.plotly_chart(fig_bar, use_container_width=True)
-
+            
+            # Display the data values in the dashboard
+            st.subheader("📋 Data Values")
+            
+            # Create a dataframe to display the values
+            display_df = pd.DataFrame({
+                x_col: x_categories,
+                y_title: y_values
+            })
+            
+            # Display as a styled dataframe
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Optional: Display as metrics in columns
+            st.subheader("🔢 Top Values")
+            metric_cols = st.columns(min(len(x_categories), 4))
+            
+            for i, (category, value) in enumerate(zip(x_categories[:4], y_values[:4])):
+                with metric_cols[i]:
+                    st.metric(
+                        label=str(category),
+                        value=f"{value:.2f}" if isinstance(value, float) else str(value)
+                    )
 
 
 
@@ -884,7 +953,7 @@ with tabs[0]:  # 3D Surface Plot tab
                         bgcolor='rgba(0,0,0,0)'
                     ),
                     template=None,
-                    font=dict(color='black', family='Inter'),
+                    font=dict(color='white', family='Inter'),
                     paper_bgcolor='rgba(0,0,0,0)',
                     height=400
                 )
@@ -895,66 +964,7 @@ with tabs[0]:  # 3D Surface Plot tab
     else:
         st.warning("Not enough numeric columns for 3D surface plot.")
 
-with tabs[1]:  # Bubble Chart tab
-    st.markdown("### Bubble Chart")
 
-    try:
-        numeric_columns = df.select_dtypes(include=['number']).columns.tolist()
-        categorical_columns = df.select_dtypes(include=['object', 'category']).columns.tolist()
-
-        x_axis = st.selectbox(
-            "Select X-axis variable", 
-            options=numeric_columns, 
-            index=numeric_columns.index("Rainfall (mm)") if "Rainfall (mm)" in numeric_columns else 0,
-            key="bubble_x"
-        )
-        y_axis = st.selectbox(
-            "Select Y-axis variable", 
-            options=numeric_columns, 
-            index=numeric_columns.index("Temperature (°C)") if "Temperature (°C)" in numeric_columns else 1,
-            key="bubble_y"
-        )
-        size_var = st.selectbox(
-            "Select bubble size variable", 
-            options=numeric_columns, 
-            index=numeric_columns.index("Economic Loss ($)") if "Economic Loss ($)" in numeric_columns else 2,
-            key="bubble_size"
-        )
-        color_var_options = categorical_columns + numeric_columns
-        color_var = st.selectbox(
-            "Select bubble color variable", 
-            options=color_var_options, 
-            index=color_var_options.index("Infrastructure Risk (damage level)") if "Infrastructure Risk (damage level)" in color_var_options else 0,
-            key="bubble_color"
-        )
-
-        plot_df = df[[x_axis, y_axis, size_var, color_var, 'District']].dropna()
-        if len(plot_df) > 1000:
-            plot_df = plot_df.sample(n=1000, random_state=42)
-
-        fig_bubble = px.scatter(
-            plot_df,
-            x=x_axis,
-            y=y_axis,
-            size=size_var,
-            color=color_var,
-            color_discrete_sequence=px.colors.qualitative.Safe,
-            hover_name="District",
-            size_max=60,
-            title=f"{x_axis} vs {y_axis} — Bubble Size by {size_var}",
-            template=None,
-            height=600
-        )
-        fig_bubble.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='black', family='Inter')
-        )
-
-        st.plotly_chart(fig_bubble, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Error loading bubble chart: {e}")
 
 col1, = st.columns(1)
 
@@ -1004,7 +1014,7 @@ col1, col2 = st.columns([4, 1])
 
 with col2:
     st.markdown("**Chart Configuration**")
-    chart_type = st.selectbox("Chart Type", ["Scatter", "Line", "Area"])
+    chart_type = st.selectbox("Chart Type", ["Scatter", "2D Histogram", "Countour plot"])
 
 with col1:
     if chart_type == "Scatter":
@@ -1013,32 +1023,57 @@ with col1:
                 <h3>📊 Dynamic Scatter Analysis</h3>
             </div>
         """, unsafe_allow_html=True)
-        
+
         x1 = st.selectbox("🎯 X Axis", numeric_columns, key="x1")
         y1 = st.selectbox("🎯 Y Axis", numeric_columns, key="y1")
         color1 = st.selectbox("🎨 Color By", [None] + non_numeric_columns, key="c1")
-        
+        point_size = st.slider("🔘 Point Size", 1, 10, 4)
+        alpha = st.slider("✨ Opacity", 0.0, 1.0, 0.4)
+        show_regression = st.checkbox("📈 Show Regression Line (Linear)", value=True)
+
+        # Optional: Filter by district
+        selected_districts = st.multiselect(
+            "🗺️ Filter by District (optional)",
+            options=df_sample["District"].unique(),
+            default=[]
+        )
+
+        # Drop missing values
         filtered_df = df_sample.dropna(subset=[x1, y1])
+
+        if selected_districts:
+            filtered_df = filtered_df[filtered_df["District"].isin(selected_districts)]
+
+        # Optional downsample for performance
+        if len(filtered_df) > 5000:
+            filtered_df = filtered_df.sample(5000, random_state=42)
+
+        # Create the scatter plot with optional regression line
         fig1 = px.scatter(
             filtered_df,
             x=x1,
             y=y1,
             color=color1 if color1 else None,
+            opacity=alpha,
+            trendline="ols" if show_regression else None,
             template="plotly_dark",
-            color_discrete_sequence=px.colors.qualitative.Set3
+            color_discrete_sequence=px.colors.qualitative.Set3,
+            height=400
         )
+
+        fig1.update_traces(marker=dict(size=point_size))
         fig1.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white', family='Poppins'),
-            height=400
         )
+
         st.plotly_chart(fig1, use_container_width=True)
-    
-    elif chart_type == "Line":
+
+    elif chart_type == "2D Histogram":
         st.markdown("""
             <div class="chart-container">
-                <h3>📈 Line Plot</h3>
+                <h3>2D Histogram</h3>
             </div>
         """, unsafe_allow_html=True)
         
@@ -1047,50 +1082,90 @@ with col1:
         color2 = st.selectbox("🎨 Color By", [None] + non_numeric_columns, key="c2")
         
         filtered_df = df_sample.dropna(subset=[x2, y2])
-        fig2 = px.line(
-            filtered_df,
-            x=x2,
-            y=y2,
-            color=color2 if color2 else None,
-            template="plotly_dark",
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        fig2.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', family='Poppins'),
-            height=400
+        fig2 = go.Figure(go.Histogram2d(
+        x=filtered_df[x2],
+        y=filtered_df[y2],
+        nbinsx=30,
+        nbinsy=30,
+        colorscale='Viridis'
+    ))
+        fig2.update_layout(             
+        plot_bgcolor='rgba(0,0,0,0)',    # Transparent plot background             
+        paper_bgcolor='rgba(0,0,0,0)',   # Transparent paper background             
+        font=dict(color='white', family='Poppins'),             
+        height=400,
+        xaxis_title=x2,
+        yaxis_title=y2,
+        title=f"2D Histogram: {y2} vs {x2}",
+        # Extra transparency settings
+        xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+        yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
         )
         st.plotly_chart(fig2, use_container_width=True)
     
     else:  # Area
-        st.markdown("""
-            <div class="chart-container">
-                <h3>📈 Area Plot</h3>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        x3 = st.selectbox("🎯 X Axis", numeric_columns, key="x3")
-        y3 = st.selectbox("🎯 Y Axis", numeric_columns, key="y3")
-        color3 = st.selectbox("🎨 Color By", [None] + non_numeric_columns, key="c3")
-        
-        filtered_df = df_sample.dropna(subset=[x3, y3])
-        fig3 = px.area(
-            filtered_df,
-            x=x3,
-            y=y3,
-            color=color3 if color3 else None,
-            template="plotly_dark",
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        fig3.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', family='Poppins'),
-            height=400
-        )
-        st.plotly_chart(fig3, use_container_width=True)
+      st.markdown("""
+    <div class="Countour plot">
+        <h3>🌈 Contour Plot (Labeled & Colored)</h3>
+    </div>
+""", unsafe_allow_html=True)
 
+x3 = st.selectbox("🎯 X Axis", numeric_columns, key="x3")         
+y3 = st.selectbox("🎯 Y Axis", numeric_columns, key="y3")         
+show_points = st.checkbox("🔘 Show Sample Points", value=True, key="points_contour")
+
+filtered_df = df_sample.dropna(subset=[x3, y3])
+x_vals = filtered_df[x3]
+y_vals = filtered_df[y3]
+
+fig3 = go.Figure()
+
+fig3.add_trace(go.Histogram2dContour(
+    x=x_vals,
+    y=y_vals,
+    colorscale='Turbo',
+    contours=dict(showlabels=True, coloring='fill'),
+    showscale=True,
+    ncontours=20,
+    opacity=0.75,
+    colorbar=dict(
+        title=dict(
+            text="Density Level",             # ✅ FIXED: Title for colorbar
+            font=dict(size=14, color="white")
+        ),
+        tickfont=dict(color="white")
+    )
+))
+
+if show_points:
+    sample_points = filtered_df.sample(n=min(1000, len(filtered_df)))
+    fig3.add_trace(go.Scatter(
+        x=sample_points[x3],
+        y=sample_points[y3],
+        mode='markers',
+        marker=dict(size=3, color='white', opacity=0.4),
+        name="Sample Points",
+        showlegend=False
+    ))
+
+fig3.update_layout(
+    template="plotly_dark",
+    height=500,
+    margin=dict(l=40, r=20, t=50, b=40),
+    plot_bgcolor='rgba(0,0,20,0.95)',
+    paper_bgcolor='rgba(10,10,30,1)',
+    font=dict(color='white', family='Poppins'),
+    xaxis=dict(
+        title=dict(text=x3, font=dict(size=14, color='white')),
+        gridcolor='rgba(255,255,255,0.15)'
+    ),
+    yaxis=dict(
+        title=dict(text=y3, font=dict(size=14, color='white')),
+        gridcolor='rgba(255,255,255,0.15)'
+    )
+)
+
+st.plotly_chart(fig3, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Download Section
