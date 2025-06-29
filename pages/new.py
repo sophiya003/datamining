@@ -13,7 +13,7 @@ import json
 
 # Page configuration
 st.set_page_config(
-    page_title="🌍 Climate Analytics Hub", 
+    page_title="Nepal Data Analysis", 
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
@@ -498,9 +498,8 @@ try:
     index=non_numeric_columns.index("District") if "District" in non_numeric_columns else 0,
     key="geo_data"
 )
-            district_col_geo = st.selectbox("📍 District Column (Map)", options=list(gdf.columns), index=list(gdf.columns).index('DISTRICT') if 'DISTRICT' in gdf.columns else 0, key="geo_geo")
-            
-            # Debug info: show mismatches
+            district_col_geo = st.selectbox(" District Column (Map)", options=list(gdf.columns), index=list(gdf.columns).index('DISTRICT') if 'DISTRICT' in gdf.columns else 0, key="geo_geo")
+    
             df_districts = set(df[district_col_data].dropna().astype(str).str.upper().str.strip().unique())
             gdf_districts = set(gdf[district_col_geo].dropna().astype(str).str.upper().str.strip().unique())
             missing_in_map = df_districts - gdf_districts
@@ -511,19 +510,17 @@ try:
             st.write(f"Districts in data but missing in map: {sorted(missing_in_map)}")
             st.write(f"Districts in map but missing in data: {sorted(missing_in_data)}")
 
-        # Clean and prepare data for mapping
         df_clean = df.copy()
         gdf_clean = gdf.copy()
         
-        # Normalize district names (uppercase & strip)
+       
         df_clean[district_col_data] = df_clean[district_col_data].astype(str).str.upper().str.strip()
         gdf_clean[district_col_geo] = gdf_clean[district_col_geo].astype(str).str.upper().str.strip()
         
-        # Remove any 'NAN' strings if they appear
+      
         df_clean = df_clean[df_clean[district_col_data] != 'NAN']
         gdf_clean = gdf_clean[gdf_clean[district_col_geo] != 'NAN']
 
-        # Aggregate data (mean) over entire filtered dataset
         agg_data = df_clean[[district_col_data, geo_col]].dropna().groupby(district_col_data)[geo_col].mean().reset_index()
         
         merged = gdf_clean.merge(
@@ -546,7 +543,7 @@ try:
                     mapbox_style="carto-positron",
                     center={"lat": 28.3949, "lon": 84.1240},
                     zoom=5,
-                    title=f"🗺️ {geo_col} Distribution in Nepal",
+                    title=f"{geo_col} Distribution in Nepal",
                     labels={geo_col: f"{geo_col} Value"}
                 )
                 fig_map.update_geos(
@@ -628,11 +625,10 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<div class="chart-container slide-in">', unsafe_allow_html=True)
 st.markdown('<h3 class="chart-title"> Category-wise Comparison</h3>', unsafe_allow_html=True)
 
-# You can let user customize max unique categories if needed
 MAX_CATEGORIES = 10
 TOP_N = 10
 
-# Helper function
+
 def get_few_category_columns(df, max_unique=MAX_CATEGORIES):
     return [col for col in df.columns if df[col].dtype == 'object' and df[col].nunique() <= max_unique]
 
@@ -640,7 +636,7 @@ few_category_columns = get_few_category_columns(df_sample)
 
 tabs = st.tabs(["Pie", "Donut", "Bar"])
 
-with tabs[0]:  # Pie tab
+with tabs[0]:  
     if len(few_category_columns) == 0:
         st.warning("No categorical columns with fewer than 10 unique values found for pie chart.")
     else:
@@ -662,7 +658,7 @@ with tabs[0]:  # Pie tab
             )
             st.plotly_chart(fig_pie, use_container_width=True)
 
-with tabs[1]:  # Donut tab
+with tabs[1]:  
     if len(numeric_columns) == 0:
         st.warning("No numeric columns available for donut chart.")
     else:
@@ -685,7 +681,7 @@ with tabs[1]:  # Donut tab
             )
             st.plotly_chart(fig_donut, use_container_width=True)
 
-with tabs[2]:  # Bar tab
+with tabs[2]: 
     if len(few_category_columns) == 0:
         st.warning("No categorical columns with fewer than 10 unique values found for bar chart.")
     else:
@@ -701,7 +697,7 @@ with tabs[2]:  # Bar tab
             )
         
         with col2:
-            # Y-axis selection (numeric columns only)
+           
             numeric_columns = df_sample.select_dtypes(include=[np.number]).columns.tolist()
             if len(numeric_columns) == 0:
                 st.warning("No numeric columns found for Y-axis.")
@@ -714,8 +710,6 @@ with tabs[2]:  # Bar tab
                 )
         
         if x_col in df_sample.columns and y_col is not None:
-            # Create bar chart using numeric Y-axis values
-            # Group by X column and aggregate Y column (using mean, but you can change to sum, etc.)
             bar_data = df_sample.groupby(x_col)[y_col].mean().nlargest(TOP_N)
             y_values = bar_data.values
             x_categories = bar_data.index
@@ -771,7 +765,7 @@ with tabs[2]:  # Bar tab
             )
             
             # Optional: Display as metrics in columns
-            st.subheader("🔢 Top Values")
+            st.subheader(" Top Values")
             metric_cols = st.columns(min(len(x_categories), 4))
             
             for i, (category, value) in enumerate(zip(x_categories[:4], y_values[:4])):
@@ -969,13 +963,13 @@ with tabs[0]:  # 3D Surface Plot tab
 col1, = st.columns(1)
 
 with col1:
-    st.markdown('<h3 class="chart-title">📦 Boxplot Visualization</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 class="chart-title"> Boxplot Visualization</h3>', unsafe_allow_html=True)
 
     # Select the numeric column to plot
-    y_column = st.selectbox("🎯 Select Numeric Column", options=numeric_columns, key="box_y")
+    y_column = st.selectbox("Select Numeric Column", options=numeric_columns, key="box_y")
 
     # Optional grouping
-    color_by = st.selectbox("🎨 Group By (Optional)", options=[None] + non_numeric_columns, key="box_color")
+    color_by = st.selectbox("Group By (Optional)", options=[None] + non_numeric_columns, key="box_color")
 
     # Filter data to drop NA in needed columns
     subset_cols = [y_column] + ([color_by] if color_by else [])
@@ -989,7 +983,7 @@ with col1:
         points="all",  # Show all points on the plot
         template="plotly_dark",
         color_discrete_sequence=px.colors.qualitative.Pastel,
-        title=f"📊 Distribution of {y_column}" + (f" grouped by {color_by}" if color_by else ""),
+        title=f"Distribution of {y_column}" + (f" grouped by {color_by}" if color_by else ""),
         labels={y_column: y_column, color_by: color_by} if color_by else {y_column: y_column},
         hover_data=filtered_df.columns,
         height=400,
@@ -1008,7 +1002,7 @@ with col1:
 
 # Row 3: Interactive Analysis
 st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
-st.markdown('<h3 class="chart-title">🎨 Interactive Multi-Dimensional Analysis</h3>', unsafe_allow_html=True)
+st.markdown('<h3 class="chart-title">Interactive Multi-Dimensional Analysis</h3>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([4, 1])
 
@@ -1024,16 +1018,16 @@ with col1:
             </div>
         """, unsafe_allow_html=True)
 
-        x1 = st.selectbox("🎯 X Axis", numeric_columns, key="x1")
-        y1 = st.selectbox("🎯 Y Axis", numeric_columns, key="y1")
-        color1 = st.selectbox("🎨 Color By", [None] + non_numeric_columns, key="c1")
-        point_size = st.slider("🔘 Point Size", 1, 10, 4)
-        alpha = st.slider("✨ Opacity", 0.0, 1.0, 0.4)
-        show_regression = st.checkbox("📈 Show Regression Line (Linear)", value=True)
+        x1 = st.selectbox(" X Axis", numeric_columns, key="x1")
+        y1 = st.selectbox(" Y Axis", numeric_columns, key="y1")
+        color1 = st.selectbox(" Color By", [None] + non_numeric_columns, key="c1")
+        point_size = st.slider(" Point Size", 1, 10, 4)
+        alpha = st.slider(" Opacity", 0.0, 1.0, 0.4)
+        show_regression = st.checkbox("Show Regression Line (Linear)", value=True)
 
         # Optional: Filter by district
         selected_districts = st.multiselect(
-            "🗺️ Filter by District (optional)",
+            " Filter by District (optional)",
             options=df_sample["District"].unique(),
             default=[]
         )
@@ -1077,9 +1071,9 @@ with col1:
             </div>
         """, unsafe_allow_html=True)
         
-        x2 = st.selectbox("🎯 X Axis", numeric_columns, key="x2")
-        y2 = st.selectbox("🎯 Y Axis", numeric_columns, key="y2")
-        color2 = st.selectbox("🎨 Color By", [None] + non_numeric_columns, key="c2")
+        x2 = st.selectbox(" X Axis", numeric_columns, key="x2")
+        y2 = st.selectbox(" Y Axis", numeric_columns, key="y2")
+        color2 = st.selectbox(" Color By", [None] + non_numeric_columns, key="c2")
         
         filtered_df = df_sample.dropna(subset=[x2, y2])
         fig2 = go.Figure(go.Histogram2d(
@@ -1106,13 +1100,13 @@ with col1:
     else:  # Area
       st.markdown("""
     <div class="Countour plot">
-        <h3>🌈 Contour Plot (Labeled & Colored)</h3>
+        <h3> Contour Plot (Labeled & Colored)</h3>
     </div>
 """, unsafe_allow_html=True)
 
-x3 = st.selectbox("🎯 X Axis", numeric_columns, key="x3")         
-y3 = st.selectbox("🎯 Y Axis", numeric_columns, key="y3")         
-show_points = st.checkbox("🔘 Show Sample Points", value=True, key="points_contour")
+x3 = st.selectbox("X Axis", numeric_columns, key="x3")         
+y3 = st.selectbox(" Y Axis", numeric_columns, key="y3")         
+show_points = st.checkbox("Show Sample Points", value=True, key="points_contour")
 
 filtered_df = df_sample.dropna(subset=[x3, y3])
 x_vals = filtered_df[x3]
@@ -1130,7 +1124,7 @@ fig3.add_trace(go.Histogram2dContour(
     opacity=0.75,
     colorbar=dict(
         title=dict(
-            text="Density Level",             # ✅ FIXED: Title for colorbar
+            text="Density Level",             
             font=dict(size=14, color="white")
         ),
         tickfont=dict(color="white")
@@ -1170,13 +1164,13 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Download Section
 st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
-st.markdown('<h3 class="chart-title">💾 Data Export Center</h3>', unsafe_allow_html=True)
+st.markdown('<h3 class="chart-title">Data Export Center</h3>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.download_button(
-        label="📥 Download Filtered Data",
+        label="Download Filtered Data",
         data=filtered_df.to_csv(index=False).encode("utf-8"),
         file_name="filtered_climate_data.csv",
         mime="text/csv",
@@ -1187,7 +1181,7 @@ with col2:
     if len(numeric_columns) > 0:
         summary_stats = filtered_df[numeric_columns].describe()
         st.download_button(
-            label="📊 Download Summary Stats",
+            label=" Download Summary Stats",
             data=summary_stats.to_csv().encode("utf-8"),
             file_name="climate_summary_statistics.csv",
             mime="text/csv",
@@ -1198,7 +1192,7 @@ with col3:
     if len(numeric_columns) > 1:
         corr_data = filtered_df[numeric_columns].corr()
         st.download_button(
-            label="🔗 Download Correlations",
+            label="Download Correlations",
             data=corr_data.to_csv().encode("utf-8"),
             file_name="climate_correlations.csv",
             mime="text/csv",

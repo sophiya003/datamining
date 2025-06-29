@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-# ---------------------- Streamlit Setup ----------------------
-st.set_page_config(page_title="Climate Data Cleaner", layout="wide")
-st.title("🌤️ Climate Data Cleaning & Preprocessing")
 
-# ---------------------- Load Data ----------------------
+st.set_page_config(page_title="Climate Data Cleaner", layout="wide")
+st.title("Climate Data Cleaning & Preprocessing")
+
+
 
 if "data" in st.session_state:
     df = st.session_state["data"]
@@ -20,10 +20,10 @@ else:
         st.error("Default dataset not found.")
         st.stop()
 
-# ---------------------- Convert datetime columns ----------------------
+
 def convert_datetime(df):
     for col in df.columns:
-        # Try converting columns that look like dates (strings with date info)
+        
         if df[col].dtype == object:
             try:
                 df[col] = pd.to_datetime(df[col], errors='raise')
@@ -34,16 +34,16 @@ def convert_datetime(df):
 
 df = convert_datetime(df)
 
-# ---------------------- Column Selection ----------------------
-with st.expander("🧩 Select Columns"):
+
+with st.expander(" Select Columns"):
     all_columns = df.columns.tolist()
     selected_columns = st.multiselect("Choose columns to include", all_columns, default=all_columns)
     if selected_columns:
         df = df[selected_columns]
     else:
-        st.warning("⚠️ Please select at least one column.")
+        st.warning(" Please select at least one column.")
 
-# ---------------------- Remove Duplicate Columns ----------------------
+
 def remove_duplicate_columns(df):
     duplicated_cols = []
     cols = df.columns
@@ -60,7 +60,7 @@ def remove_duplicate_columns(df):
 
 df = remove_duplicate_columns(df)
 
-# ---------------------- Filter Rows ----------------------
+
 with st.expander("🔍 Filter Rows"):
     apply_filter = st.checkbox("Enable Filtering", value=False)
     if apply_filter:
@@ -79,7 +79,7 @@ with st.expander("🔍 Filter Rows"):
             selected_vals = st.multiselect(f"Values for {filter_col}", unique_vals, default=unique_vals)
             df = df[df[filter_col].isin(selected_vals)]
 
-# ---------------------- Handle Missing Values ----------------------
+
 missing_strategy = st.radio("🧹 Handle Missing Values", ["Drop rows", "Fill median", "Fill most frequent"], horizontal=True)
 
 if missing_strategy == "Drop rows":
@@ -89,8 +89,8 @@ elif missing_strategy == "Fill median":
 elif missing_strategy == "Fill most frequent":
     df = df.fillna(df.mode().iloc[0])
 
-# ---------------------- Outlier Detection & Removal ----------------------
-with st.expander("⚠️ Outlier Detection & Removal"):
+
+with st.expander(" Outlier Detection & Removal"):
     enable_outlier = st.checkbox("Enable Outlier Removal?", value=False)
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
     
@@ -110,8 +110,8 @@ with st.expander("⚠️ Outlier Detection & Removal"):
             after_rows = df.shape[0]
             st.success(f"Removed {before_rows - after_rows} total outlier rows.")
 
-# ---------------------- Normalize/Standardize ----------------------
-normalize = st.checkbox("🔧 Normalize/Standardize numeric columns?")
+
+normalize = st.checkbox(" Normalize/Standardize numeric columns?")
 if normalize:
     scale_method = st.selectbox("Choose Scaling Method", ["MinMax", "Standard"])
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
@@ -119,22 +119,22 @@ if normalize:
         scaler = MinMaxScaler() if scale_method == "MinMax" else StandardScaler()
         df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
     else:
-        st.warning("⚠️ No numeric columns to scale.")
+        st.warning(" No numeric columns to scale.")
 
-# ---------------------- Show Processed Data ----------------------
-if st.button("🚀 Process Data"):
+
+if st.button(" Process Data"):
     if df.empty:
-        st.error("❌ No data available after preprocessing.")
+        st.error(" No data available after preprocessing.")
     else:
-        st.success("✅ Data ready for visualization!")
-        st.dataframe(df)  # Show full dataframe after processing
-        st.info(f"🧾 Data shape: {df.shape}")
+        st.success(" Data ready for visualization!")
+        st.dataframe(df)  
+        st.info(f"Data shape: {df.shape}")
 
-        # Save processed data in session_state
+        
         st.session_state["preprocessed_data"] = df.copy()
 
         st.download_button(
-            label="⬇️ Download Cleaned CSV",
+            label=" Download Cleaned CSV",
             data=df.to_csv(index=False).encode("utf-8"),
             file_name="cleaned_climate_data.csv",
             mime="text/csv"
