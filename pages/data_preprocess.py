@@ -3,12 +3,10 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-
 st.set_page_config(page_title="Climate Data Cleaner", layout="wide")
 st.title("Climate Data Cleaning & Preprocessing")
 
-
-
+# Load data
 if "data" in st.session_state:
     df = st.session_state["data"]
     st.success("Using uploaded or session data.")
@@ -23,7 +21,6 @@ else:
 
 def convert_datetime(df):
     for col in df.columns:
-        
         if df[col].dtype == object:
             try:
                 df[col] = pd.to_datetime(df[col], errors='raise')
@@ -35,13 +32,13 @@ def convert_datetime(df):
 df = convert_datetime(df)
 
 
-with st.expander(" Select Columns"):
+with st.expander("Select Columns"):
     all_columns = df.columns.tolist()
     selected_columns = st.multiselect("Choose columns to include", all_columns, default=all_columns)
     if selected_columns:
         df = df[selected_columns]
     else:
-        st.warning(" Please select at least one column.")
+        st.warning("Please select at least one column.")
 
 
 def remove_duplicate_columns(df):
@@ -60,8 +57,7 @@ def remove_duplicate_columns(df):
 
 df = remove_duplicate_columns(df)
 
-
-with st.expander("🔍 Filter Rows"):
+with st.expander("Filter Rows"):
     apply_filter = st.checkbox("Enable Filtering", value=False)
     if apply_filter:
         filter_col = st.selectbox("Select column to filter", df.columns)
@@ -80,8 +76,7 @@ with st.expander("🔍 Filter Rows"):
             df = df[df[filter_col].isin(selected_vals)]
 
 
-missing_strategy = st.radio("🧹 Handle Missing Values", ["Drop rows", "Fill median", "Fill most frequent"], horizontal=True)
-
+missing_strategy = st.radio("Handle Missing Values", ["Drop rows", "Fill median", "Fill most frequent"], horizontal=True)
 if missing_strategy == "Drop rows":
     df = df.dropna()
 elif missing_strategy == "Fill median":
@@ -90,10 +85,10 @@ elif missing_strategy == "Fill most frequent":
     df = df.fillna(df.mode().iloc[0])
 
 
-with st.expander(" Outlier Detection & Removal"):
+with st.expander("Outlier Detection & Removal"):
     enable_outlier = st.checkbox("Enable Outlier Removal?", value=False)
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-    
+
     if enable_outlier and numeric_cols:
         outlier_cols = st.multiselect("Select numeric columns for outlier removal", numeric_cols, default=numeric_cols)
         k = st.number_input("IQR multiplier (k)", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
@@ -111,7 +106,7 @@ with st.expander(" Outlier Detection & Removal"):
             st.success(f"Removed {before_rows - after_rows} total outlier rows.")
 
 
-normalize = st.checkbox(" Normalize/Standardize numeric columns?")
+normalize = st.checkbox("Normalize/Standardize numeric columns?")
 if normalize:
     scale_method = st.selectbox("Choose Scaling Method", ["MinMax", "Standard"])
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
@@ -119,22 +114,43 @@ if normalize:
         scaler = MinMaxScaler() if scale_method == "MinMax" else StandardScaler()
         df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
     else:
-        st.warning(" No numeric columns to scale.")
+        st.warning("No numeric columns to scale.")
 
 
-if st.button(" Process Data"):
+with st.expander("Sampling"):
+    enable_sampling = st.checkbox("Enable Sampling?", value=False)
+    if enable_sampling:
+        sample_method = st.selectbox("Sampling Method", ["Random", "Stratified (by column)"])
+        sample_size = st.number_input("Sample size (number of rows)", min_value=1, max_value=len(df), value=min(100, len(df)), step=1)
+
+        if sample_method == "Random":
+            df = df.sample(n=sample_size, random_state=42)
+        else:
+            stratify_col = st.selectbox("Select column for stratified sampling", df.columns)
+            if df[stratify_col].nunique() > 1:
+                df = (
+                    df.groupby(stratify_col, group_keys=False)
+                      .apply(lambda x: x.sample(int(np.rint(sample_size * len(x) / len(df))), random_state=42))
+                )
+                if len(df) > sample_size:
+                    df = df.sample(n=sample_size, random_state=42)
+            else:
+                st.warning("Selected column does not have enough unique values for stratified sampling.")
+
+
+
+if st.button("Process Data"):
     if df.empty:
-        st.error(" No data available after preprocessing.")
+        st.error("No data available after preprocessing.")
     else:
-        st.success(" Data ready for visualization!")
-        st.dataframe(df)  
+        st.success("Data ready for visualization!")
+        st.dataframe(df)
         st.info(f"Data shape: {df.shape}")
 
-        
         st.session_state["preprocessed_data"] = df.copy()
 
         st.download_button(
-            label=" Download Cleaned CSV",
+            label="Download Cleaned CSV",
             data=df.to_csv(index=False).encode("utf-8"),
             file_name="cleaned_climate_data.csv",
             mime="text/csv"

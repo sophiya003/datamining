@@ -11,7 +11,6 @@ import geopandas as gpd
 import json
 
 
-# Page configuration
 st.set_page_config(
     page_title="Nepal Data Analysis", 
     layout="wide",
@@ -23,7 +22,7 @@ st.set_page_config(
     }
 )
 
-# Enhanced CSS with modern glassmorphism and animations
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -393,7 +392,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    # Date filtering
+    
     date_col = "Date"
     region_col = "District"
     
@@ -412,9 +411,9 @@ with st.sidebar:
     else:
         start_date = end_date = None
     
-    # Region filtering
+   
     if region_col in df.columns:
-        st.markdown("**🏔️ Regions**")
+        st.markdown("**Regions**")
         selected_regions = st.multiselect(
             "Select Regions", 
             options=sorted(df[region_col].dropna().unique()), 
@@ -432,7 +431,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
-# Apply filters
+
 filtered_df = df.copy()
 if start_date and end_date:
     filtered_df = filtered_df[(filtered_df[date_col] >= pd.to_datetime(start_date)) & 
@@ -440,10 +439,10 @@ if start_date and end_date:
 if selected_regions:
     filtered_df = filtered_df[filtered_df[region_col].isin(selected_regions)]
 
-# Sample data for performance
+
 df_sample = filtered_df.sample(n=min(len(filtered_df), 5000), random_state=1)
 
-# Key Metrics Dashboard
+
 st.markdown('<div class="fade-in">', unsafe_allow_html=True)
 col1, col2, col3, col4 = st.columns(4)
 
@@ -465,7 +464,7 @@ for i, (col, metric) in enumerate(zip([col1, col2, col3, col4], metrics_data)):
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Main Dashboard Content
+
 st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
 
 
@@ -493,7 +492,7 @@ try:
         with col_map2:
             geo_col = st.selectbox("Climate Feature", primary_metric, key="geo_col")
             district_col_data = st.selectbox(
-    "📍 District Column (Data)",
+    "District Column (Data)",
     options=non_numeric_columns,
     index=non_numeric_columns.index("District") if "District" in non_numeric_columns else 0,
     key="geo_data"
@@ -570,7 +569,7 @@ try:
             else:
                 st.warning("No data available for mapping. Please check district name matching.")
                 
-                # Fallback: Simple bar chart by district
+                
                 if len(agg_data) > 0:
                     fig_bar = px.bar(
                         agg_data.head(15), 
@@ -603,7 +602,7 @@ try:
                 x=region_col, 
                 y='mean',
                 error_y='std',
-                title=f"🏔️ Top 20 Districts by {agg_col}",
+                title=f" Top 20 Districts by {agg_col}",
                 color='mean',
                 color_continuous_scale='Viridis'
             )
@@ -618,7 +617,7 @@ try:
         
 except Exception as e:
     st.error(f"Error generating geographic visualization: {e}")
-    st.info("💡 Tip: Check if your data has a district/region column that matches the map boundaries.")
+    st.info("Tip: Check if your data has a district/region column that matches the map boundaries.")
  
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -685,13 +684,13 @@ with tabs[2]:
     if len(few_category_columns) == 0:
         st.warning("No categorical columns with fewer than 10 unique values found for bar chart.")
     else:
-        # Allow users to select both X and Y columns
+       
         col1, col2 = st.columns(2)
         
         with col1:
-            # X-axis selection (categorical column)
+           
             x_col = st.selectbox(
-                "📊 X-axis (Categories)", 
+                " X-axis (Categories)", 
                 few_category_columns, 
                 key="bar_x_col"
             )
@@ -704,7 +703,7 @@ with tabs[2]:
                 y_col = None
             else:
                 y_col = st.selectbox(
-                    "📈 Y-axis (Numeric Values)", 
+                    "Y-axis (Numeric Values)", 
                     numeric_columns, 
                     key="bar_y_col"
                 )
@@ -745,26 +744,26 @@ with tabs[2]:
                 )
             )
             
-            # Display the chart
+            
             st.plotly_chart(fig_bar, use_container_width=True)
             
-            # Display the data values in the dashboard
-            st.subheader("📋 Data Values")
+           
+            st.subheader("Data Values")
             
-            # Create a dataframe to display the values
+           
             display_df = pd.DataFrame({
                 x_col: x_categories,
                 y_title: y_values
             })
             
-            # Display as a styled dataframe
+            
             st.dataframe(
                 display_df,
                 use_container_width=True,
                 hide_index=True
             )
             
-            # Optional: Display as metrics in columns
+           
             st.subheader(" Top Values")
             metric_cols = st.columns(min(len(x_categories), 4))
             
@@ -782,14 +781,14 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 
 st.markdown('<div class="chart-container slide-in">', unsafe_allow_html=True)
-# Row 1: Primary Charts
+
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown('<h3 class="chart-title">Temporal Trend Analysis</h3>', unsafe_allow_html=True)
     
     if date_col in df_sample.columns and primary_metric in df_sample.columns:
-        # Group by month for trend analysis
+       
         df_trend = df_sample.dropna(subset=[date_col, primary_metric])
         df_trend['YearMonth'] = df_trend[date_col].dt.to_period('M')
         trend_data = df_trend.groupby('YearMonth')[primary_metric].mean().reset_index()
@@ -849,7 +848,7 @@ with col2:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Row 2: Advanced Analytics
+
 st.markdown('<div class="chart-container slide-in">', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
@@ -880,7 +879,7 @@ with col1:
 with col2:
     st.markdown('<h3 class="chart-title"> Correlation Matrix</h3>', unsafe_allow_html=True)
     
-    # Select top 5 numeric columns for correlation
+   
     corr_cols = numeric_columns[:5]
     if len(corr_cols) > 1:
         corr_matrix = df_sample[corr_cols].corr()
@@ -904,7 +903,7 @@ with col2:
 
 tabs = st.tabs(["3D Surface Plot", "Bubble Chart"])
 
-with tabs[0]:  # 3D Surface Plot tab
+with tabs[0]:
     st.markdown("### 3D Surface Visualization")
     
     if len(numeric_columns) >= 3:
@@ -965,22 +964,22 @@ col1, = st.columns(1)
 with col1:
     st.markdown('<h3 class="chart-title"> Boxplot Visualization</h3>', unsafe_allow_html=True)
 
-    # Select the numeric column to plot
+   
     y_column = st.selectbox("Select Numeric Column", options=numeric_columns, key="box_y")
 
-    # Optional grouping
+   
     color_by = st.selectbox("Group By (Optional)", options=[None] + non_numeric_columns, key="box_color")
 
-    # Filter data to drop NA in needed columns
+   
     subset_cols = [y_column] + ([color_by] if color_by else [])
     filtered_df = df_sample.dropna(subset=subset_cols)
 
-    # Create the boxplot figure
+   
     fig_box = px.box(
         filtered_df,
         y=y_column,
         color=color_by if color_by else None,
-        points="all",  # Show all points on the plot
+        points="all", 
         template="plotly_dark",
         color_discrete_sequence=px.colors.qualitative.Pastel,
         title=f"Distribution of {y_column}" + (f" grouped by {color_by}" if color_by else ""),
@@ -1000,7 +999,7 @@ with col1:
     st.plotly_chart(fig_box, use_container_width=True)
 
 
-# Row 3: Interactive Analysis
+
 st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
 st.markdown('<h3 class="chart-title">Interactive Multi-Dimensional Analysis</h3>', unsafe_allow_html=True)
 
@@ -1014,7 +1013,7 @@ with col1:
     if chart_type == "Scatter":
         st.markdown("""
             <div class="chart-container">
-                <h3>📊 Dynamic Scatter Analysis</h3>
+                <h3>Dynamic Scatter Analysis</h3>
             </div>
         """, unsafe_allow_html=True)
 
@@ -1025,24 +1024,24 @@ with col1:
         alpha = st.slider(" Opacity", 0.0, 1.0, 0.4)
         show_regression = st.checkbox("Show Regression Line (Linear)", value=True)
 
-        # Optional: Filter by district
+     
         selected_districts = st.multiselect(
             " Filter by District (optional)",
             options=df_sample["District"].unique(),
             default=[]
         )
 
-        # Drop missing values
+       
         filtered_df = df_sample.dropna(subset=[x1, y1])
 
         if selected_districts:
             filtered_df = filtered_df[filtered_df["District"].isin(selected_districts)]
 
-        # Optional downsample for performance
+      
         if len(filtered_df) > 5000:
             filtered_df = filtered_df.sample(5000, random_state=42)
 
-        # Create the scatter plot with optional regression line
+       
         fig1 = px.scatter(
             filtered_df,
             x=x1,
@@ -1084,20 +1083,20 @@ with col1:
         colorscale='Viridis'
     ))
         fig2.update_layout(             
-        plot_bgcolor='rgba(0,0,0,0)',    # Transparent plot background             
-        paper_bgcolor='rgba(0,0,0,0)',   # Transparent paper background             
+        plot_bgcolor='rgba(0,0,0,0)',             
+        paper_bgcolor='rgba(0,0,0,0)',           
         font=dict(color='white', family='Poppins'),             
         height=400,
         xaxis_title=x2,
         yaxis_title=y2,
         title=f"2D Histogram: {y2} vs {x2}",
-        # Extra transparency settings
+        
         xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
         yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
         )
         st.plotly_chart(fig2, use_container_width=True)
     
-    else:  # Area
+    else:  
       st.markdown("""
     <div class="Countour plot">
         <h3> Contour Plot (Labeled & Colored)</h3>
@@ -1201,7 +1200,7 @@ with col3:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Footer
+
 st.markdown("""
 <div style="text-align: center; margin-top: 3rem; padding: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
     <h3 style="color: #60a5fa; margin-bottom: 1rem;">Nepal data analysis and visualization</h3>
