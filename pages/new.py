@@ -342,7 +342,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Load dataset
 @st.cache_data
 def load_data():
     try:
@@ -350,7 +349,6 @@ def load_data():
     except FileNotFoundError:
         return None
 
-# Retrieve dataset from session or fallback 
 if "preprocessed_data" in st.session_state:
     df = st.session_state["preprocessed_data"]
     st.success("Using preprocessed data.")
@@ -367,16 +365,16 @@ else:
         st.error("No dataset found. Please upload or preprocess data first.")
         st.stop()
 
-# Handle common issues
+
 df.columns = df.columns.str.strip()
 if 'Unnamed: 0' in df.columns:
     df.drop(columns=['Unnamed: 0'], inplace=True)
 
-# Column types
+
 numeric_columns = list(df.select_dtypes(include=['float', 'int']).columns)
 non_numeric_columns = list(df.select_dtypes(include=['object']).columns)
 
-# Main Header
+
 st.markdown("""
 <div class="main-header fade-in">
     <h1 class="main-title"> Nepals district data analysis</h1>
@@ -384,7 +382,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Enhanced Sidebar
+
 with st.sidebar:
     st.markdown("""
     <div class="filter-section">
@@ -423,7 +421,7 @@ with st.sidebar:
     else:
         selected_regions = None
     
-    # Metric selection
+  
     st.markdown("** Primary Metric**")
     primary_metric = st.selectbox(
         "Select Primary Metric",
@@ -639,7 +637,7 @@ with tabs[0]:
     if len(few_category_columns) == 0:
         st.warning("No categorical columns with fewer than 10 unique values found for pie chart.")
     else:
-        pie_col = st.selectbox("🎯 Pie Chart Column", few_category_columns, key="pie_col")
+        pie_col = st.selectbox("Pie Chart Column", few_category_columns, key="pie_col")
         if pie_col in df_sample.columns:
             pie_data = df_sample[pie_col].value_counts().nlargest(TOP_N)
             fig_pie = px.pie(
