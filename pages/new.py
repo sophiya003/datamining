@@ -633,13 +633,13 @@ MAX_CATEGORIES = 10
 TOP_N = 10
 
 def get_few_category_columns(df, max_unique=MAX_CATEGORIES):
-    # Include both object columns and numeric columns with few unique values (like binary 0,1)
+   
     categorical_cols = []
     for col in df.columns:
         if df[col].dtype == 'object' and df[col].nunique() <= max_unique:
             categorical_cols.append(col)
         elif df[col].dtype in ['int64', 'float64'] and df[col].nunique() <= max_unique:
-            # Check if it's likely categorical (like binary 0,1 or small integers)
+          
             categorical_cols.append(col)
     return categorical_cols
 
@@ -675,14 +675,13 @@ with tabs[1]:
         col1, col2 = st.columns(2)
         
         with col1:
-            outer_col = st.selectbox("Outer Ring (Primary Category)", few_category_columns, key="sunburst_outer")
+            outer_col = st.selectbox("Outer Ring ", few_category_columns, key="sunburst_outer")
         
         with col2:
             inner_options = [col for col in few_category_columns if col != outer_col]
-            inner_col = st.selectbox("Inner Ring (Secondary Category)", inner_options, key="sunburst_inner")
+            inner_col = st.selectbox("Inner Ring ", inner_options, key="sunburst_inner")
         
         if outer_col in df_sample.columns and inner_col in df_sample.columns:
-            # Create hierarchical data for sunburst
             sunburst_data = df_sample.groupby([outer_col, inner_col]).size().reset_index(name='count')
             sunburst_data = sunburst_data.nlargest(TOP_N, 'count')
             
@@ -711,7 +710,7 @@ with tabs[2]:
         
         with col1:
             x_col = st.selectbox(
-                "📊 X-axis (Categories)", 
+                "X-axis (Categories)", 
                 few_category_columns, 
                 key="stacked_x_col"
             )
@@ -741,14 +740,9 @@ with tabs[2]:
                 )
         
         if x_col in df_sample.columns and color_col is not None and y_col is not None:
-            # Create stacked bar data
             stacked_data = df_sample.groupby([x_col, color_col])[y_col].mean().reset_index()
-            
-            # Limit to top categories to avoid overcrowding
             top_x_categories = df_sample[x_col].value_counts().nlargest(TOP_N).index
             stacked_data = stacked_data[stacked_data[x_col].isin(top_x_categories)]
-            
-            # Create the stacked bar chart
             fig_stacked = px.bar(
                 stacked_data,
                 x=x_col,
@@ -757,8 +751,6 @@ with tabs[2]:
                 title=f"Stacked Bar Chart: {y_col} by {x_col} (Stacked by {color_col})",
                 color_discrete_sequence=px.colors.qualitative.Set3
             )
-            
-            # Update layout
             fig_stacked.update_layout(
                 template=None,
                 plot_bgcolor='rgba(0,0,0,0)',
@@ -785,11 +777,7 @@ with tabs[2]:
             )
             
             st.plotly_chart(fig_stacked, use_container_width=True)
-            
-            # Display summary data
-            st.subheader("📋 Stacked Data Summary")
-            
-            # Create pivot table for better display
+            st.subheader("Stacked Data Summary")
             pivot_data = stacked_data.pivot(index=x_col, columns=color_col, values=y_col)
             pivot_data = pivot_data.fillna(0)
             
@@ -1347,10 +1335,10 @@ with tabs[1]:
             st.write("Date Column: **Date**")
             date_col_anomaly = "Date"
         with col2:
-            floods_col = st.selectbox("Floods Column:", numeric_columns, key="anomaly_floods")
+            floods_col = st.selectbox("Column:", numeric_columns, key="anomaly_floods")
         with col3:
             available_drought_cols = [col for col in numeric_columns if col != floods_col]
-            drought_col = st.selectbox("Drought Column:", available_drought_cols, key="anomaly_drought")
+            drought_col = st.selectbox("Column:", available_drought_cols, key="anomaly_drought")
 
     if date_col_anomaly in df.columns and floods_col in df.columns and drought_col in df.columns:
         data_agg = df.groupby(date_col_anomaly)[[floods_col, drought_col]].sum().reset_index()
@@ -1368,10 +1356,10 @@ with tabs[2]:
             st.write("District Column: **District**")
             district_col_risk = "District"
         with col2:
-            economic_col = st.selectbox("Economic Loss Column:", numeric_columns, key="risk_economic")
+            economic_col = st.selectbox("Column:", numeric_columns, key="risk_economic")
         with col3:
             available_population_cols = [col for col in numeric_columns if col != economic_col]
-            population_col = st.selectbox("Population Exposure Column:", available_population_cols, key="risk_population")
+            population_col = st.selectbox("Column:", available_population_cols, key="risk_population")
 
     if district_col_risk in df.columns and economic_col in df.columns and population_col in df.columns:
         district_agg = df.groupby(district_col_risk)[[economic_col, population_col]].mean().reset_index()
