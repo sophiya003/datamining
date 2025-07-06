@@ -9,16 +9,20 @@ from sklearn.decomposition import PCA
 import requests
 import geopandas as gpd
 import json
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+from scipy.ndimage import gaussian_filter
 
 
 st.set_page_config(
-    page_title="Nepal Data Analysis", 
+    page_title="Nepal Data Vizualization", 
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': 'https://www.extremelycoolapp.com/help',
         'Report a bug': "https://www.extremelycoolapp.com/bug",
-        'About': "# Climate Analytics Dashboard\nBuilt with Streamlit and Plotly"
+        'About': "# District based data vizualization\nBuilt with Streamlit and Plotly"
     }
 )
 
@@ -29,9 +33,9 @@ st.markdown("""
     
     /* Global Styles with Enhanced Gradients */
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 75%, #475569 100%);
-        font-family: 'Inter', sans-serif;
-        min-height: 100vh;
+        background: linear-gradient(135deg, #4b0082 0%, #000000 100%); /* Purple to Black Gradient */
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
     }
     
     /* Animated Background */
@@ -95,7 +99,7 @@ st.markdown("""
     
     @keyframes glow {
         from { filter: drop-shadow(0 0 20px rgba(96, 165, 250, 0.3)); }
-        to { filter: drop-shadow(0 0 30px rgba(52, 211, 153, 0.4)); }
+        to { filter: drop_shadow(0 0 30px rgba(52, 211, 153, 0.4)); }
     }
     
     .subtitle {
@@ -142,7 +146,7 @@ st.markdown("""
     .metric-card:hover {
         transform: translateY(-8px) scale(1.02);
         border-color: rgba(96, 165, 250, 0.6);
-        box-shadow: 0 25px 50px -12px rgba(96, 165, 250, 0.2);
+        box_shadow: 0 25px 50px -12px rgba(96, 165, 250, 0.2);
         background: rgba(30, 41, 59, 0.6);
     }
     
@@ -220,7 +224,7 @@ st.markdown("""
         font-weight: 700;
         margin-bottom: 1.5rem;
         text-align: center;
-        text-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+        text_shadow: 0 0 10px rgba(96, 165, 250, 0.3);
     }
     
     /* Enhanced Controls */
@@ -290,7 +294,7 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
         color: white;
-        box-shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
+        box_shadow: 0 4px 15px rgba(96, 165, 250, 0.3);
     }
     
     /* Custom Scrollbar */
@@ -336,7 +340,7 @@ st.markdown("""
     
     .viz-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        box_shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -370,9 +374,12 @@ df.columns = df.columns.str.strip()
 if 'Unnamed: 0' in df.columns:
     df.drop(columns=['Unnamed: 0'], inplace=True)
 
+all_columns = df.columns.tolist()
 
+binary_cols = [col for col in df.select_dtypes(include=['int64', 'float64']).columns 
+               if df[col].dropna().nunique() == 2]
+non_numeric_columns = cat_cols = df.select_dtypes(include=['object']).columns.tolist() + binary_cols
 numeric_columns = list(df.select_dtypes(include=['float', 'int']).columns)
-non_numeric_columns = list(df.select_dtypes(include=['object']).columns)
 
 
 st.markdown("""
@@ -446,7 +453,7 @@ col1, col2, col3, col4 = st.columns(4)
 
 metrics_data = [
     {"value": f"{len(filtered_df):,}", "label": "Total Records"},
-    {"value": f"{len(numeric_columns)}", "label": "Climate Variables"},
+    {"value": f"{len(numeric_columns)}", "label": "Numeric columns"},
     {"value": f"{filtered_df[region_col].nunique() if region_col in filtered_df.columns else 0}", "label": " Districts"},
     {"value": f"{(filtered_df[date_col].max() - filtered_df[date_col].min()).days if date_col in filtered_df.columns else 0}", "label": " Days Span"}
 ]
@@ -625,15 +632,21 @@ st.markdown('<h3 class="chart-title"> Category-wise Comparison</h3>', unsafe_all
 MAX_CATEGORIES = 10
 TOP_N = 10
 
-
 def get_few_category_columns(df, max_unique=MAX_CATEGORIES):
-    return [col for col in df.columns if df[col].dtype == 'object' and df[col].nunique() <= max_unique]
+    # Include both object columns and numeric columns with few unique values (like binary 0,1)
+    categorical_cols = []
+    for col in df.columns:
+        if df[col].dtype == 'object' and df[col].nunique() <= max_unique:
+            categorical_cols.append(col)
+        elif df[col].dtype in ['int64', 'float64'] and df[col].nunique() <= max_unique:
+            # Check if it's likely categorical (like binary 0,1 or small integers)
+            categorical_cols.append(col)
+    return categorical_cols
 
 few_category_columns = get_few_category_columns(df_sample)
+tabs = st.tabs(["Pie", "Sunburst", "Stacked Bar"])
 
-tabs = st.tabs(["Pie", "Donut", "Bar"])
-
-with tabs[0]:  
+with tabs[0]:
     if len(few_category_columns) == 0:
         st.warning("No categorical columns with fewer than 10 unique values found for pie chart.")
     else:
@@ -656,45 +669,66 @@ with tabs[0]:
             st.plotly_chart(fig_pie, use_container_width=True)
 
 with tabs[1]:  
-    if len(numeric_columns) == 0:
-        st.warning("No numeric columns available for donut chart.")
+    if len(few_category_columns) < 2:
+        st.warning("Need at least 2 categorical columns for sunburst chart.")
     else:
-        donut_col = st.selectbox("🍩 Donut Chart Column", numeric_columns, key="donut_col")
-        if donut_col in df_sample.columns:
-            donut_data = df_sample[donut_col].value_counts().nlargest(TOP_N)
-            fig_donut = px.pie(
-                names=donut_data.index,
-                values=donut_data.values,
-                hole=0.5,
-                template=None,
-                color_discrete_sequence=px.colors.qualitative.Pastel
-            )
-            fig_donut.update_traces(textinfo='percent+label')
-            fig_donut.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='black', family='Inter'),
-                height=400
-            )
-            st.plotly_chart(fig_donut, use_container_width=True)
-
-with tabs[2]: 
-    if len(few_category_columns) == 0:
-        st.warning("No categorical columns with fewer than 10 unique values found for bar chart.")
-    else:
-       
         col1, col2 = st.columns(2)
         
         with col1:
-           
+            outer_col = st.selectbox("Outer Ring (Primary Category)", few_category_columns, key="sunburst_outer")
+        
+        with col2:
+            inner_options = [col for col in few_category_columns if col != outer_col]
+            inner_col = st.selectbox("Inner Ring (Secondary Category)", inner_options, key="sunburst_inner")
+        
+        if outer_col in df_sample.columns and inner_col in df_sample.columns:
+            # Create hierarchical data for sunburst
+            sunburst_data = df_sample.groupby([outer_col, inner_col]).size().reset_index(name='count')
+            sunburst_data = sunburst_data.nlargest(TOP_N, 'count')
+            
+            fig_sunburst = px.sunburst(
+                sunburst_data,
+                path=[outer_col, inner_col],
+                values='count',
+                color='count',
+                color_continuous_scale='Viridis',
+                title=f"Sunburst Chart: {outer_col} → {inner_col}"
+            )
+            
+            fig_sunburst.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='black', family='Inter'),
+                height=500
+            )
+            st.plotly_chart(fig_sunburst, use_container_width=True)
+
+with tabs[2]: 
+    if len(few_category_columns) == 0:
+        st.warning("No categorical columns with fewer than 10 unique values found for stacked bar chart.")
+    else:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
             x_col = st.selectbox(
-                " X-axis (Categories)", 
+                "📊 X-axis (Categories)", 
                 few_category_columns, 
-                key="bar_x_col"
+                key="stacked_x_col"
             )
         
         with col2:
-           
+            color_options = [col for col in few_category_columns if col != x_col]
+            if len(color_options) == 0:
+                st.warning("Need at least 2 categorical columns for stacked bar chart.")
+                color_col = None
+            else:
+                color_col = st.selectbox(
+                    "Stack By (Color)", 
+                    color_options, 
+                    key="stacked_color_col"
+                )
+        
+        with col3:
             numeric_columns = df_sample.select_dtypes(include=[np.number]).columns.tolist()
             if len(numeric_columns) == 0:
                 st.warning("No numeric columns found for Y-axis.")
@@ -703,79 +737,66 @@ with tabs[2]:
                 y_col = st.selectbox(
                     "Y-axis (Numeric Values)", 
                     numeric_columns, 
-                    key="bar_y_col"
+                    key="stacked_y_col"
                 )
         
-        if x_col in df_sample.columns and y_col is not None:
-            bar_data = df_sample.groupby(x_col)[y_col].mean().nlargest(TOP_N)
-            y_values = bar_data.values
-            x_categories = bar_data.index
-            y_title = f"Average {y_col}"
+        if x_col in df_sample.columns and color_col is not None and y_col is not None:
+            # Create stacked bar data
+            stacked_data = df_sample.groupby([x_col, color_col])[y_col].mean().reset_index()
             
-            # Create the bar chart
-            fig_bar = px.bar(
-                x=y_values,
-                y=x_categories,
-                orientation='h',
-                color=y_values,
-                color_continuous_scale='Viridis',
-                labels={'x': y_title, 'y': x_col},
-                title=f"{y_title} by {x_col}"
+            # Limit to top categories to avoid overcrowding
+            top_x_categories = df_sample[x_col].value_counts().nlargest(TOP_N).index
+            stacked_data = stacked_data[stacked_data[x_col].isin(top_x_categories)]
+            
+            # Create the stacked bar chart
+            fig_stacked = px.bar(
+                stacked_data,
+                x=x_col,
+                y=y_col,
+                color=color_col,
+                title=f"Stacked Bar Chart: {y_col} by {x_col} (Stacked by {color_col})",
+                color_discrete_sequence=px.colors.qualitative.Set3
             )
             
             # Update layout
-            fig_bar.update_layout(
+            fig_stacked.update_layout(
                 template=None,
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white', family='Inter'),
                 height=400,
-                showlegend=False,
                 xaxis=dict(
                     showgrid=True, 
                     gridcolor='rgba(0,0,0,0.1)',
-                    title=y_title
+                    title=x_col
                 ),
                 yaxis=dict(
-                    showgrid=False,
-                    title=x_col
+                    showgrid=True,
+                    gridcolor='rgba(0,0,0,0.1)',
+                    title=f"Average {y_col}"
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
                 )
             )
             
+            st.plotly_chart(fig_stacked, use_container_width=True)
             
-            st.plotly_chart(fig_bar, use_container_width=True)
+            # Display summary data
+            st.subheader("📋 Stacked Data Summary")
             
-           
-            st.subheader("Data Values")
-            
-           
-            display_df = pd.DataFrame({
-                x_col: x_categories,
-                y_title: y_values
-            })
-            
+            # Create pivot table for better display
+            pivot_data = stacked_data.pivot(index=x_col, columns=color_col, values=y_col)
+            pivot_data = pivot_data.fillna(0)
             
             st.dataframe(
-                display_df,
-                use_container_width=True,
-                hide_index=True
+                pivot_data,
+                use_container_width=True
             )
-            
-           
-            st.subheader(" Top Values")
-            metric_cols = st.columns(min(len(x_categories), 4))
-            
-            for i, (category, value) in enumerate(zip(x_categories[:4], y_values[:4])):
-                with metric_cols[i]:
-                    st.metric(
-                        label=str(category),
-                        value=f"{value:.2f}" if isinstance(value, float) else str(value)
-                    )
-
-
-
-st.markdown('</div>', unsafe_allow_html=True)
-
 
 
 st.markdown('<div class="chart-container slide-in">', unsafe_allow_html=True)
@@ -899,7 +920,34 @@ with col2:
         
         st.plotly_chart(fig_corr, use_container_width=True)
 
-tabs = st.tabs(["3D Surface Plot", "Bubble Chart"])
+tabs = st.tabs(["3D Surface Plot"])
+
+def smooth_z_matrix(Z, sigma=1.2):
+    
+    Z_clean = np.nan_to_num(Z, nan=0.0)
+    
+    Z_smooth = gaussian_filter(Z_clean, sigma=sigma)
+    
+    return Z_smooth
+
+def apply_temporal_averaging(df, date_col, value_col, region_col, window_days=7):
+    df_smooth = df.copy()
+    smoothed_data = []
+    
+    for region in df[region_col].unique():
+        region_data = df[df[region_col] == region].copy()
+        region_data = region_data.sort_values(date_col)
+        
+       
+        region_data[f'{value_col}_smooth'] = region_data[value_col].rolling(
+            window=min(window_days, len(region_data)), 
+            center=True, 
+            min_periods=1
+        ).mean()
+        
+        smoothed_data.append(region_data)
+    
+    return pd.concat(smoothed_data, ignore_index=True)
 
 with tabs[0]:
     st.markdown("### 3D Surface Visualization")
@@ -911,52 +959,167 @@ with tabs[0]:
             df_surface = df_sample.dropna(subset=[date_col, region_col, surface_var])
             
             if len(df_surface) > 0:
-                districts = df_surface[region_col].unique()[:10]
-                dates_sorted = sorted(df_surface[date_col].unique())[:30]
-                district_map = {d: i for i, d in enumerate(districts)}
-                date_map = {d: i for i, d in enumerate(dates_sorted)}
                 
-                df_surface = df_surface[
-                    df_surface[region_col].isin(districts) & 
-                    df_surface[date_col].isin(dates_sorted)
-                ]
-                df_surface['District_idx'] = df_surface[region_col].map(district_map)
-                df_surface['Date_idx'] = df_surface[date_col].map(date_map)
-                
-                Z = np.full((len(districts), len(dates_sorted)), np.nan)
-                for _, row in df_surface.iterrows():
-                    Z[row['District_idx'], row['Date_idx']] = row[surface_var]
-                Z = np.nan_to_num(Z)
-                
-                fig_3d = go.Figure(data=[go.Surface(
-                    z=Z,
-                    x=list(date_map.values()),
-                    y=list(district_map.values()),
-                    colorscale='Viridis'
-                )])
-                
-                fig_3d.update_layout(
-                    title=f'3D Surface: {surface_var}',
-                    scene=dict(
-                        xaxis=dict(title='Time'),
-                        yaxis=dict(title='Districts'),
-                        zaxis=dict(title=surface_var),
-                        bgcolor='rgba(0,0,0,0)'
-                    ),
-                    template=None,
-                    font=dict(color='white', family='Inter'),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    height=400
+                df_surface = apply_temporal_averaging(
+                    df_surface, date_col, surface_var, region_col, window_days=7
                 )
+                plot_var = f'{surface_var}_smooth'
                 
-                st.plotly_chart(fig_3d, use_container_width=True)
+               
+                all_districts = sorted(df_surface[region_col].unique())
+                
+               
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    selected_districts = st.multiselect(
+                        "Select Districts (up to 10)",
+                        options=all_districts,
+                        default=all_districts[:5] if len(all_districts) >= 5 else all_districts,
+                        max_selections=10,
+                        key="district_selector"
+                    )
+                
+                with col2:
+                   
+                    if st.button("Select All", key="select_all_districts"):
+                        selected_districts = all_districts[:10]
+                    if st.button("Clear All", key="clear_all_districts"):
+                        selected_districts = []
+                
+               
+
+                
+                if selected_districts:
+                    
+                    all_dates = sorted(df_surface[date_col].unique())
+                    
+                   
+                    try:
+                        if df_surface[date_col].dtype == 'datetime64[ns]' or pd.api.types.is_datetime64_any_dtype(df_surface[date_col]):
+                            dates_sorted = [d for d in all_dates if d.year >= 2000 and d.year <= 2024]
+                        else:
+                            
+                            dates_sorted = [d for d in all_dates if int(str(d)[:4]) >= 2000 and int(str(d)[:4]) <= 2024]
+                    except:
+                       
+                        dates_sorted = all_dates
+                    
+                    
+                    
+                    
+                  
+                    district_map = {d: i for i, d in enumerate(selected_districts)}
+                    date_map = {d: i for i, d in enumerate(dates_sorted)}
+                  
+                    df_surface_filtered = df_surface[
+                        df_surface[region_col].isin(selected_districts) & 
+                        df_surface[date_col].isin(dates_sorted)
+                    ]
+              
+                    df_surface_filtered['District_idx'] = df_surface_filtered[region_col].map(district_map)
+                    df_surface_filtered['Date_idx'] = df_surface_filtered[date_col].map(date_map)
+                   
+                    Z = np.full((len(selected_districts), len(dates_sorted)), np.nan)
+                    for _, row in df_surface_filtered.iterrows():
+                        Z[row['District_idx'], row['Date_idx']] = row[plot_var]
+                    
+                    
+                    Z_filled = np.nan_to_num(Z, nan=np.nanmean(Z))
+                    
+                
+                    Z_smooth = smooth_z_matrix(Z_filled, sigma=1.2)
+                  
+                    
+                   
+                    fig_3d = go.Figure(data=[go.Surface(
+                        z=Z_smooth,
+                        x=list(date_map.values()),
+                        y=list(district_map.values()),
+                        colorscale='Viridis',
+                        hovertemplate='<b>District:</b> %{customdata[0]}<br>' +
+                                    '<b>Time:</b> %{customdata[1]}<br>' +
+                                    '<b>Value:</b> %{z:.2f}<extra></extra>',
+                        customdata=[[[selected_districts[i], str(dates_sorted[j])[:10]] 
+                                   for j in range(len(dates_sorted))] 
+                                   for i in range(len(selected_districts))],
+                        showscale=True,
+                        colorbar=dict(
+                            title=f"{surface_var} (Smoothed)",
+                            tickfont=dict(color='white')
+                        ),
+                       
+                        lighting=dict(
+                            ambient=0.3,
+                            diffuse=0.9,
+                            specular=0.4,
+                            roughness=0.05,
+                            fresnel=0.2
+                        ),
+                       
+                        contours=dict(
+                            z=dict(show=True, usecolormap=True, project_z=True, width=1, color='rgba(255,255,255,0.3)'),
+                            x=dict(show=False),
+                            y=dict(show=False)
+                        )
+                    )])
+                    
+                    fig_3d.update_layout(
+                        title=dict(
+                            text=f'3D Surface: {surface_var} across {len(selected_districts)} Districts (Optimally Smoothed)',
+                            font=dict(color='white', size=16, family='Inter')
+                        ),
+                        scene=dict(
+                            xaxis=dict(
+                                title=dict(text='Time (2000-2024)', font=dict(color='white')),
+                                tickvals=list(range(0, len(dates_sorted), max(1, len(dates_sorted)//12))),
+                                ticktext=[str(dates_sorted[i])[:10] for i in range(0, len(dates_sorted), max(1, len(dates_sorted)//12))],
+                                tickfont=dict(color='white', size=10),
+                                showgrid=True,
+                                gridcolor='rgba(255,255,255,0.2)',
+                                tickangle=45
+                            ),
+                            yaxis=dict(
+                                title=dict(text='Districts', font=dict(color='white')),
+                                tickvals=list(range(len(selected_districts))),
+                                ticktext=[dist[:15] + '...' if len(dist) > 15 else dist for dist in selected_districts],
+                                tickfont=dict(color='white', size=10),
+                                showgrid=True,
+                                gridcolor='rgba(255,255,255,0.2)',
+                                tickangle=45
+                            ),
+                            zaxis=dict(
+                                title=dict(text=surface_var, font=dict(color='white')),
+                                tickfont=dict(color='white', size=10),
+                                showgrid=True,
+                                gridcolor='rgba(255,255,255,0.2)'
+                            ),
+                            bgcolor='rgba(0,0,0,0)',
+                            camera=dict(
+                                eye=dict(x=1.5, y=1.5, z=1.2)
+                            ),
+                            aspectmode='cube'
+                        ),
+                        template=None,
+                        font=dict(color='white', family='Inter'),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        height=600,
+                        margin=dict(l=0, r=0, t=50, b=0)
+                    )
+                    
+                    st.plotly_chart(fig_3d, use_container_width=True)
+                    
+            
+                        
+                else:
+                    st.warning("Please select at least one district to visualize.")
+                    
         except Exception as e:
             st.error(f"3D Surface Plot Error: {e}")
+            st.error("Please check your data format and try again.")
     else:
         st.warning("Not enough numeric columns for 3D surface plot.")
-
-
-
 col1, = st.columns(1)
 
 with col1:
@@ -997,51 +1160,46 @@ with col1:
     st.plotly_chart(fig_box, use_container_width=True)
 
 
-
 st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
-st.markdown('<h3 class="chart-title">Interactive Multi-Dimensional Analysis</h3>', unsafe_allow_html=True)
+st.markdown('<h3 class="chart-title">Interactive Correlational Analysis</h3>', unsafe_allow_html=True)
 
-col1, col2 = st.columns([4, 1])
+tab1, tab2, tab3 = st.tabs(["Scatter Plot", "2D Histogram", "Contour Plot"])
 
-with col2:
-    st.markdown("**Chart Configuration**")
-    chart_type = st.selectbox("Chart Type", ["Scatter", "2D Histogram", "Countour plot"])
 
-with col1:
-    if chart_type == "Scatter":
-        st.markdown("""
-            <div class="chart-container">
-                <h3>Dynamic Scatter Analysis</h3>
-            </div>
-        """, unsafe_allow_html=True)
+with tab1:
+    col_scatter1, col_scatter2 = st.columns([4, 1])
 
-        x1 = st.selectbox(" X Axis", numeric_columns, key="x1")
-        y1 = st.selectbox(" Y Axis", numeric_columns, key="y1")
-        color1 = st.selectbox(" Color By", [None] + non_numeric_columns, key="c1")
-        point_size = st.slider(" Point Size", 1, 10, 4)
-        alpha = st.slider(" Opacity", 0.0, 1.0, 0.4)
-        show_regression = st.checkbox("Show Regression Line (Linear)", value=True)
+    with col_scatter2:
+        st.markdown("**Chart Configuration**")
+        x1 = st.selectbox("X Axis", numeric_columns, key="x1_new")
 
-     
+
+        available_y_columns = [col for col in numeric_columns if col != x1]
+
+
+        y1 = st.selectbox("Y Axis", available_y_columns, key="y1_new")
+        color1 = st.selectbox("Color By", [None] + non_numeric_columns, key="c1_new")
+        point_size = st.slider("Point Size", 1, 10, 4, key="ps_new")
+        alpha = st.slider("Opacity", 0.0, 1.0, 0.4, key="alpha_new")
+        show_regression = st.checkbox("Show Regression Line (Linear)", value=True, key="reg_new")
         selected_districts = st.multiselect(
-            " Filter by District (optional)",
+            "Filter by District (optional)",
             options=df_sample["District"].unique(),
-            default=[]
+            default=[],
+            key="dist_new"
         )
 
-       
-        filtered_df = df_sample.dropna(subset=[x1, y1])
+    with col_scatter1:
+        filtered_df_scatter = df_sample.dropna(subset=[x1, y1])
 
         if selected_districts:
-            filtered_df = filtered_df[filtered_df["District"].isin(selected_districts)]
+            filtered_df_scatter = filtered_df_scatter[filtered_df_scatter["District"].isin(selected_districts)]
 
-      
-        if len(filtered_df) > 5000:
-            filtered_df = filtered_df.sample(5000, random_state=42)
+        if len(filtered_df_scatter) > 5000:
+            filtered_df_scatter = filtered_df_scatter.sample(5000, random_state=42)
 
-       
         fig1 = px.scatter(
-            filtered_df,
+            filtered_df_scatter,
             x=x1,
             y=y1,
             color=color1 if color1 else None,
@@ -1049,7 +1207,7 @@ with col1:
             trendline="ols" if show_regression else None,
             template="plotly_dark",
             color_discrete_sequence=px.colors.qualitative.Set3,
-            height=400
+            height=450
         )
 
         fig1.update_traces(marker=dict(size=point_size))
@@ -1061,147 +1219,170 @@ with col1:
 
         st.plotly_chart(fig1, use_container_width=True)
 
-    elif chart_type == "2D Histogram":
-        st.markdown("""
-            <div class="chart-container">
-                <h3>2D Histogram</h3>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        x2 = st.selectbox(" X Axis", numeric_columns, key="x2")
-        y2 = st.selectbox(" Y Axis", numeric_columns, key="y2")
-        color2 = st.selectbox(" Color By", [None] + non_numeric_columns, key="c2")
-        
-        filtered_df = df_sample.dropna(subset=[x2, y2])
+
+with tab2:
+    col_hist2d1, col_hist2d2 = st.columns([4, 1])
+
+    with col_hist2d2:
+        st.markdown("**Chart Configuration**")
+        x2 = st.selectbox("X Axis", numeric_columns, key="x2_new")
+        y2 = st.selectbox("Y Axis", numeric_columns, key="y2_new")
+        color2 = st.selectbox("Color By (Not fully supported)", [None] + non_numeric_columns, key="c2_new")
+        nbinsx_2d = st.slider("Number of Bins (X)", 10, 100, 30, key="nbinsx_new")
+        nbinsy_2d = st.slider("Number of Bins (Y)", 10, 100, 30, key="nbinsy_new")
+
+    with col_hist2d1:
+        filtered_df_hist2d = df_sample.dropna(subset=[x2, y2])
         fig2 = go.Figure(go.Histogram2d(
-        x=filtered_df[x2],
-        y=filtered_df[y2],
-        nbinsx=30,
-        nbinsy=30,
-        colorscale='Viridis'
-    ))
-        fig2.update_layout(             
-        plot_bgcolor='rgba(0,0,0,0)',             
-        paper_bgcolor='rgba(0,0,0,0)',           
-        font=dict(color='white', family='Poppins'),             
-        height=400,
-        xaxis_title=x2,
-        yaxis_title=y2,
-        title=f"2D Histogram: {y2} vs {x2}",
-        
-        xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
-        yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
+            x=filtered_df_hist2d[x2],
+            y=filtered_df_hist2d[y2],
+            nbinsx=nbinsx_2d,
+            nbinsy=nbinsy_2d,
+            colorscale='Viridis'
+        ))
+        fig2.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white', family='Poppins'),
+            height=450,
+            xaxis_title=x2,
+            yaxis_title=y2,
+            title=f"2D Histogram: {y2} vs {x2}",
+            xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+            yaxis=dict(gridcolor='rgba(128,128,128,0.2)')
         )
         st.plotly_chart(fig2, use_container_width=True)
-    
-    else:  
-      st.markdown("""
-    <div class="Countour plot">
-        <h3> Contour Plot (Labeled & Colored)</h3>
-    </div>
-""", unsafe_allow_html=True)
 
-x3 = st.selectbox("X Axis", numeric_columns, key="x3")         
-y3 = st.selectbox(" Y Axis", numeric_columns, key="y3")         
-show_points = st.checkbox("Show Sample Points", value=True, key="points_contour")
+with tab3:
+    st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
+    st.markdown('<h3 class="chart-title">Interactive Multi-Dimensional Analysis: Contour Plot</h3>', unsafe_allow_html=True)
 
-filtered_df = df_sample.dropna(subset=[x3, y3])
-x_vals = filtered_df[x3]
-y_vals = filtered_df[y3]
+    col_contour1, col_contour2 = st.columns([4, 1])
 
-fig3 = go.Figure()
+    with col_contour2:
+        st.markdown("**Chart Configuration**")
+        x3 = st.selectbox("X Axis", numeric_columns, key="x3_new")
+        y3 = st.selectbox("Y Axis", numeric_columns, key="y3_new")
+        show_points = st.checkbox("Show Sample Points", value=True, key="points_contour_new")
+        ncontours = st.slider("Number of Contours", 5, 50, 20, key="ncontours_new")
 
-fig3.add_trace(go.Histogram2dContour(
-    x=x_vals,
-    y=y_vals,
-    colorscale='Turbo',
-    contours=dict(showlabels=True, coloring='fill'),
-    showscale=True,
-    ncontours=20,
-    opacity=0.75,
-    colorbar=dict(
-        title=dict(
-            text="Density Level",             
-            font=dict(size=14, color="white")
-        ),
-        tickfont=dict(color="white")
-    )
-))
+    with col_contour1:
+        filtered_df_contour = df_sample.dropna(subset=[x3, y3])
+        x_vals = filtered_df_contour[x3]
+        y_vals = filtered_df_contour[y3]
 
-if show_points:
-    sample_points = filtered_df.sample(n=min(1000, len(filtered_df)))
-    fig3.add_trace(go.Scatter(
-        x=sample_points[x3],
-        y=sample_points[y3],
-        mode='markers',
-        marker=dict(size=3, color='white', opacity=0.4),
-        name="Sample Points",
-        showlegend=False
-    ))
+        fig3 = go.Figure()
 
-fig3.update_layout(
-    template="plotly_dark",
-    height=500,
-    margin=dict(l=40, r=20, t=50, b=40),
-    plot_bgcolor='rgba(0,0,20,0.95)',
-    paper_bgcolor='rgba(10,10,30,1)',
-    font=dict(color='white', family='Poppins'),
-    xaxis=dict(
-        title=dict(text=x3, font=dict(size=14, color='white')),
-        gridcolor='rgba(255,255,255,0.15)'
-    ),
-    yaxis=dict(
-        title=dict(text=y3, font=dict(size=14, color='white')),
-        gridcolor='rgba(255,255,255,0.15)'
-    )
-)
+        fig3.add_trace(go.Histogram2dContour(
+            x=x_vals,
+            y=y_vals,
+            colorscale='Turbo',
+            contours=dict(showlabels=True, coloring='fill'),
+            showscale=True,
+            ncontours=ncontours,
+            opacity=0.75,
+            colorbar=dict(
+                title=dict(text="Density Level", font=dict(size=14, color="white")),
+                tickfont=dict(color="white")
+            )
+        ))
 
-st.plotly_chart(fig3, use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
+        if show_points:
+            sample_points = filtered_df_contour.sample(n=min(1000, len(filtered_df_contour)))
+            fig3.add_trace(go.Scatter(
+                x=sample_points[x3],
+                y=sample_points[y3],
+                mode='markers',
+                marker=dict(size=3, color='white', opacity=0.4),
+                name="Sample Points",
+                showlegend=False
+            ))
 
-# Download Section
-st.markdown('<div class="chart-container fade-in">', unsafe_allow_html=True)
-st.markdown('<h3 class="chart-title">Data Export Center</h3>', unsafe_allow_html=True)
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.download_button(
-        label="Download Filtered Data",
-        data=filtered_df.to_csv(index=False).encode("utf-8"),
-        file_name="filtered_climate_data.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
-
-with col2:
-    if len(numeric_columns) > 0:
-        summary_stats = filtered_df[numeric_columns].describe()
-        st.download_button(
-            label=" Download Summary Stats",
-            data=summary_stats.to_csv().encode("utf-8"),
-            file_name="climate_summary_statistics.csv",
-            mime="text/csv",
-            use_container_width=True
+        fig3.update_layout(
+            template="plotly_dark",
+            height=550,
+            margin=dict(l=40, r=20, t=50, b=40),
+            plot_bgcolor='rgba(0,0,20,0.95)',
+            paper_bgcolor='rgba(10,10,30,1)',
+            font=dict(color='white', family='Poppins'),
+            xaxis=dict(
+                title=dict(text=x3, font=dict(size=14, color='white')),
+                gridcolor='rgba(255,255,255,0.15)'
+            ),
+            yaxis=dict(
+                title=dict(text=y3, font=dict(size=14, color='white')),
+                gridcolor='rgba(255,255,255,0.15)'
+            )
         )
+        st.plotly_chart(fig3, use_container_width=True)
 
-with col3:
-    if len(numeric_columns) > 1:
-        corr_data = filtered_df[numeric_columns].corr()
-        st.download_button(
-            label="Download Correlations",
-            data=corr_data.to_csv().encode("utf-8"),
-            file_name="climate_correlations.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+st.header("Advanced analysis")
+
+tabs = st.tabs([
+    "Correlation Matrix", 
+    "Anomaly Detection", 
+    "Economic Risk Scatter", 
+])
+
+
+with tabs[0]:
+    st.subheader("Correlation Matrix")
+    with st.expander("Select Columns for Correlation"):
+        corr_columns = st.multiselect("Select columns for correlation matrix:", numeric_columns,
+                                      default=numeric_columns[:10] if len(numeric_columns) > 10 else numeric_columns)
+    if corr_columns:
+        sampled = df.sample(min(len(df), 10000), random_state=42)
+        corr = sampled[corr_columns].corr()
+        fig2 = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu')
+        st.plotly_chart(fig2, use_container_width=True)
+
+
+with tabs[1]:
+    st.subheader("Time Series Anomaly Detection")
+    with st.expander("Configure Anomaly Plot Columns"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write("Date Column: **Date**")
+            date_col_anomaly = "Date"
+        with col2:
+            floods_col = st.selectbox("Floods Column:", numeric_columns, key="anomaly_floods")
+        with col3:
+            available_drought_cols = [col for col in numeric_columns if col != floods_col]
+            drought_col = st.selectbox("Drought Column:", available_drought_cols, key="anomaly_drought")
+
+    if date_col_anomaly in df.columns and floods_col in df.columns and drought_col in df.columns:
+        data_agg = df.groupby(date_col_anomaly)[[floods_col, drought_col]].sum().reset_index()
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(x=data_agg[date_col_anomaly], y=data_agg[floods_col], mode='lines', name=floods_col))
+        fig3.add_trace(go.Scatter(x=data_agg[date_col_anomaly], y=data_agg[drought_col], mode='lines', name=drought_col))
+        st.plotly_chart(fig3, use_container_width=True)
+
+
+with tabs[2]:
+    st.subheader("Economic Loss vs Population Exposure")
+    with st.expander("Configure Risk Map Columns"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write("District Column: **District**")
+            district_col_risk = "District"
+        with col2:
+            economic_col = st.selectbox("Economic Loss Column:", numeric_columns, key="risk_economic")
+        with col3:
+            available_population_cols = [col for col in numeric_columns if col != economic_col]
+            population_col = st.selectbox("Population Exposure Column:", available_population_cols, key="risk_population")
+
+    if district_col_risk in df.columns and economic_col in df.columns and population_col in df.columns:
+        district_agg = df.groupby(district_col_risk)[[economic_col, population_col]].mean().reset_index()
+        fig4 = px.scatter(district_agg, x=economic_col, y=population_col, text=district_col_risk,
+                          size=population_col, color=economic_col)
+        st.plotly_chart(fig4, use_container_width=True)
 
 
 st.markdown("""
 <div style="text-align: center; margin-top: 3rem; padding: 2rem; border-top: 1px solid rgba(255,255,255,0.1);">
-    <h3 style="color: #60a5fa; margin-bottom: 1rem;">Nepal data analysis and visualization</h3>
+    <h3 style="color: #60a5fa; margin-bottom: 1rem;">Nepal data visualization</h3>
     <p style="color: #94a3b8; font-size: 1.1rem; margin-bottom: 0.5rem;">Data Mining mini project</p>
     <p style="color: #64748b; font-size: 0.9rem;">Built using Streamlit, Plotly By Sophiya and Puja</p>
 </div>
