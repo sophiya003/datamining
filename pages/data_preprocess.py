@@ -233,7 +233,7 @@ data.columns = (
     data.columns
     .str.replace(r'[^a-zA-Z0-9\s]', '', regex=True) 
     .str.replace(r'\s+', '_', regex=True)            
-    .str.lower()                                   
+                               
 )
 
 if 'date' in data.columns:
@@ -557,7 +557,14 @@ if sampling_method != 'None' and st.button(" Apply Sampling"):
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 st.markdown("## Export & Save")
 
-# Export options
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+st.markdown("## Final Processed Data")
+
+st.dataframe(data.head(100), use_container_width=True)
+
+st.markdown("Showing the first 100 rows. You can download the full dataset above.")
+
+
 st.markdown("### Export Options")
 
 col1, col2 = st.columns(2)

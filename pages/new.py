@@ -384,8 +384,8 @@ numeric_columns = list(df.select_dtypes(include=['float', 'int']).columns)
 
 st.markdown("""
 <div class="main-header fade-in">
-    <h1 class="main-title"> Nepals district data analysis</h1>
-    <p class="subtitle">Advanced Climate Monitoring & Analysis Platform for Nepal</p>
+    <h1 class="main-title"> Nepals district data visualizations</h1>
+    <p class="subtitle">Advanced data Analysis Platform for Nepal</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -777,14 +777,7 @@ with tabs[2]:
             )
             
             st.plotly_chart(fig_stacked, use_container_width=True)
-            st.subheader("Stacked Data Summary")
-            pivot_data = stacked_data.pivot(index=x_col, columns=color_col, values=y_col)
-            pivot_data = pivot_data.fillna(0)
-            
-            st.dataframe(
-                pivot_data,
-                use_container_width=True
-            )
+           
 
 
 st.markdown('<div class="chart-container slide-in">', unsafe_allow_html=True)

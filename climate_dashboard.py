@@ -134,8 +134,8 @@ def load_lottie_url(url):
 def show_banner():
     st.markdown("""
     <div class='gradient-banner'>
-        <h1>Climate Data Dashboard</h1>
-        <p>Upload, explore, and visualize climate data with clarity and ease.</p>
+        <h1>Nepals district wise data visualization</h1>
+        <p>Upload, explore, and visualize district data with clarity and ease.</p>
     </div>
     """, unsafe_allow_html=True)
 
